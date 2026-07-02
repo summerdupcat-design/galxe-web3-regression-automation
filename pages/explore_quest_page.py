@@ -2,7 +2,7 @@ import re
 from playwright.sync_api import Page, expect
 
 QUEST_DETAIL_URL = re.compile(r"/quest/(?!explore/)[^/]+/[^/?]+")
-class ExplorePage:
+class ExploreQuestPage:
     def __init__(self, page: Page):
         self.page = page
 
