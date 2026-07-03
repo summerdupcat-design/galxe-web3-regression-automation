@@ -16,14 +16,13 @@ def test_user_can_login_with_metamask(page: Page, context: BrowserContext):
     galxe_login = GalxeLoginPage(page)
     galxe_login.click_login_button()
 
-    with context.expect_page() as popup_info:
-        galxe_login.choose_metamask()
-    popup = popup_info.value
+    # 唤起 MetaMask 钱包
+    popup = galxe_login.choose_metamask(context)
 
+    # 等待签名弹窗
     if metamask.approve_popup(popup) == "connect":
         sign_popup = context.wait_for_event("page", timeout=30_000)
+        # 签名
         metamask.approve_popup(sign_popup)
-
-    expect(page.get_by_role("button", name=re.compile(r"Log in|Login", re.I))).not_to_be_visible(
-        timeout=30_000
-    )
+    galxe_login.assert_login_success()
+    

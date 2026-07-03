@@ -1,11 +1,13 @@
 import os
+import re
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
 from playwright.sync_api import BrowserContext, Page, sync_playwright
-
+from pages.galxe_login_page import GalxeLoginPage
 from pages.metamask_page import MetamaskPage
+from utils.config import get_base_url
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
@@ -61,7 +63,30 @@ def page(context: BrowserContext) -> Page:
 
 
 @pytest.fixture
-def username():
-    print("\n前置准备数据")
-    yield "summer"
-    print("\n后置清理数据")
+def guest_page(playwright_instance) -> Page:
+    browser = playwright_instance.chromium.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+    page.bring_to_front()
+    yield page
+    context.close()
+    browser.close()
+
+
+@pytest.fixture
+def logged_in_page(page, context):
+    galxe_login = GalxeLoginPage(page)
+    page.goto(get_base_url(), wait_until="load")
+    page.bring_to_front()
+    login_button = page.get_by_role("banner").get_by_role(
+        "button", name=re.compile(r"Log in|Login", re.I)
+    )
+    if login_button.is_visible(timeout=5_000):
+        galxe_login.click_login_button()
+        popup = galxe_login.choose_metamask(context)
+        metamask = MetamaskPage(context)
+        if metamask.approve_popup(popup) == "connect":
+            sign_popup = context.wait_for_event("page", timeout=30_000)
+            metamask.approve_popup(sign_popup)
+    galxe_login.assert_login_success()
+    yield page

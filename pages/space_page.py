@@ -33,4 +33,51 @@ class SpacePage:
         self.page.wait_for_url(SPACE_DETAIL_URL)
         return space_title
 
-    
+    def _follow_button(self):
+        return self.page.get_by_role(
+            "button", name=re.compile(r"^\+\s*Follow$", re.I)
+        )
+
+    def _following_button(self):
+        return self.page.get_by_role(
+            "button", name=re.compile(r"^Following$", re.I)
+        )
+
+    def ensure_following(self) -> None:
+        if self._following_button().count() and self._following_button().first.is_visible():
+            return
+        self.click_space_follow_button()
+        self.assert_user_follow_success()
+
+    def click_space_follow_button(self):
+        follow_button = self._follow_button()
+        expect(follow_button.first).to_be_visible(timeout=30_000)
+        follow_button.first.scroll_into_view_if_needed()
+        follow_button.first.click()
+
+    def click_space_unfollow_button(self):
+        unfollow_button = self._following_button()
+        expect(unfollow_button.first).to_be_visible(timeout=30_000)
+        unfollow_button.first.scroll_into_view_if_needed()
+        unfollow_button.first.click()
+
+    def confirm_unfollow_space(self):
+        confirm_dialog = self.page.get_by_role("dialog")
+        expect(confirm_dialog).to_be_visible(timeout=30_000)
+        confirm_button = confirm_dialog.get_by_role(
+            "button", name=re.compile(r"^Confirm$|^Unfollow$|^确认$", re.I)
+        )
+        expect(confirm_button.first).to_be_visible(timeout=30_000)
+        confirm_button.first.click()
+
+    def assert_user_follow_success(self):
+        expect(self._following_button().first).to_be_visible(timeout=30_000)
+
+    def assert_user_unfollow_success(self):
+        expect(self._follow_button().first).to_be_visible(timeout=30_000)
+    def assert_connect_wallet_dialog_is_visible(self):
+        dialog = self.page.get_by_role("dialog")
+        expect(dialog).to_be_visible(timeout=30_000)
+        expect(dialog.get_by_text("MetaMask", exact=True).first).to_be_visible(
+            timeout=30_000
+        )

@@ -36,7 +36,13 @@ def test_explore_all_should_show_all_quests(page: Page):
     card_count = quest_cards.count()
     print(f"card_count: {card_count}")
     assert card_count > 0
-    
+
+def test_open_first_quest_detail(page: Page):  
+    open_homepage(page)
+    explore_page = ExploreQuestPage(page)
+    explore_page.open_all_quests()
+    card_title = explore_page.open_first_quest_detail()
+    assert_quest_detail_loaded(page, card_title)
 
 
 
