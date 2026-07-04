@@ -1,13 +1,21 @@
 import os
 import re
+import time
 from pathlib import Path
+from typing import Callable, TypedDict
 
 import pytest
 from dotenv import load_dotenv
 from playwright.sync_api import BrowserContext, Page, sync_playwright
+from pages.create_quest_page import CreateQuestPage
 from pages.galxe_login_page import GalxeLoginPage
 from pages.metamask_page import MetamaskPage
 from utils.config import get_base_url
+
+
+class ReleasedQuest(TypedDict):
+    url: str
+    title: str
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
@@ -76,6 +84,8 @@ def guest_page(playwright_instance) -> Page:
 @pytest.fixture
 def logged_in_page(page, context):
     galxe_login = GalxeLoginPage(page)
+    metamask = MetamaskPage(context)
+    metamask.ensure_unlocked()
     page.goto(get_base_url(), wait_until="load")
     page.bring_to_front()
     login_button = page.get_by_role("banner").get_by_role(
@@ -84,9 +94,66 @@ def logged_in_page(page, context):
     if login_button.is_visible(timeout=5_000):
         galxe_login.click_login_button()
         popup = galxe_login.choose_metamask(context)
-        metamask = MetamaskPage(context)
         if metamask.approve_popup(popup) == "connect":
             sign_popup = context.wait_for_event("page", timeout=30_000)
             metamask.approve_popup(sign_popup)
     galxe_login.assert_login_success()
     yield page
+
+
+@pytest.fixture
+def create_quest(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
+    def _create_quest(
+        *,
+        title: str | None = None,
+        description: str = "Automated test quest description",
+        page_name: str | None = None,
+        page_link: str = "https://galxe.com",
+        points: str = "10",
+    ) -> ReleasedQuest:
+        create_page = CreateQuestPage(logged_in_page)
+        create_page.open()
+
+        quest_title = title or f"Test Quest {int(time.time())}"
+        create_page.set_quest_info(title=quest_title, description=description)
+        create_page.go_to_next_step()
+
+        create_page.set_point_reward()
+        create_page.go_to_next_step()
+
+        create_page.set_quest_task_group(
+            page_name=page_name or f"Visit Page {int(time.time())}",
+            page_link=page_link,
+            points=points,
+        )
+        create_page.disable_participation_requirement()
+        quest_url = create_page.release(quest_title)
+        return {"url": quest_url, "title": quest_title}
+
+    return _create_quest
+
+
+@pytest.fixture
+def create_quest_no_credentials(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
+    def _create_quest_no_credentials(
+        *,
+        title: str | None = None,
+        description: str = "Automated test quest description",
+        points: str = "10",
+    ) -> ReleasedQuest:
+        create_page = CreateQuestPage(logged_in_page)
+        create_page.open()
+
+        quest_title = title or f"Test Quest {int(time.time())}"
+        create_page.set_quest_info(title=quest_title, description=description)
+        create_page.set_quest_private()
+        create_page.go_to_next_step()
+
+        create_page.set_point_reward()
+        create_page.go_to_next_step()
+
+        create_page.enable_no_task_requirement(points=points)
+        quest_url = create_page.release(quest_title)
+        return {"url": quest_url, "title": quest_title}
+
+    return _create_quest_no_credentials

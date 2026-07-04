@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import sys
@@ -281,6 +282,41 @@ class MetamaskPage:
                 )
             page.keyboard.press("Control+v")
 
+    def ensure_unlocked(self, password: str | None = None) -> None:
+        password = password or os.getenv("METAMASK_PASSWORD", "")
+        need_close = self.page is None or self.page.is_closed()
+        if need_close:
+            self.visit()
+        elif self.get_state() == WalletState.LOCKED:
+            self.login(password)
+            return
+        else:
+            return
+
+        if self.get_state() == WalletState.LOCKED:
+            self.login(password)
+        if need_close and self.page and not self.page.is_closed():
+            self.page.close()
+            self.page = None
+
+    def _unlock_if_needed(self, page: Page, password: str) -> bool:
+        password_input = page.locator('input[type="password"]')
+        if password_input.count() == 0 or not password_input.first.is_visible():
+            return False
+        if not password:
+            raise RuntimeError(
+                "MetaMask 已锁定，请在 .env 中设置 METAMASK_PASSWORD"
+            )
+        page.bring_to_front()
+        password_input.first.click()
+        password_input.first.fill("")
+        password_input.first.press_sequentially(password, delay=100)
+        unlock_button = page.get_by_role("button", name=re.compile(r"^登录$|^Unlock$"))
+        expect(unlock_button.first).to_be_enabled(timeout=30_000)
+        unlock_button.first.click()
+        page.wait_for_load_state("domcontentloaded")
+        return True
+
     def connect_to_site(self, popup: Page) -> None:
         connect_button = popup.get_by_role("button", name=re.compile(r"^连接$|^Connect$"))
         expect(connect_button.first).to_be_visible(timeout=30_000)
@@ -293,8 +329,13 @@ class MetamaskPage:
         expect(sign_button.first).to_be_visible(timeout=30_000)
         sign_button.first.click()
 
-    def approve_popup(self, popup: Page) -> str:
+    def approve_popup(self, popup: Page, password: str | None = None) -> str:
+        password = password or os.getenv("METAMASK_PASSWORD", "")
+        popup.bring_to_front()
         popup.wait_for_load_state("domcontentloaded")
+        if self._unlock_if_needed(popup, password):
+            popup.wait_for_timeout(1_000)
+
         connect_button = popup.get_by_role("button", name=re.compile(r"^连接$|^Connect$"))
         if connect_button.count() and connect_button.first.is_visible():
             connect_button.first.click()
