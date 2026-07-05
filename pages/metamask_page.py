@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 from enum import Enum
-
+import allure
 from playwright.sync_api import BrowserContext, Page, expect
 
 METAMASK_EXTENSION_ID = "nkbihfbeogaeaoehlefnkodbefgpgknn"
@@ -23,6 +23,7 @@ class MetamaskPage:
         self.page: Page | None = None
 
     # 1. 访问 MetaMask
+    @allure.step("访问MetaMask")
     def visit(self) -> Page:
         page = self.context.new_page()
         try:
@@ -36,6 +37,7 @@ class MetamaskPage:
         self.recover_if_error()
         return page
 
+    @allure.step("恢复MetaMask错误")
     def recover_if_error(self) -> bool:
         page = self._require_page()
         if not self._is_error_page():
@@ -55,7 +57,7 @@ class MetamaskPage:
             "MetaMask 数据库已损坏（通常是导入过程中被中断）。"
             "请关闭所有 Chrome 窗口后执行: rm -rf profiles/metamask，然后重新运行。"
         )
-
+    @allure.step("断言MetaMask错误页面")
     def _is_error_page(self) -> bool:
         page = self._require_page()
         return page.get_by_text(
@@ -63,6 +65,7 @@ class MetamaskPage:
         ).count() > 0
 
     # 2. 状态判断
+    @allure.step("获取MetaMask状态")
     def get_state(self) -> WalletState:
         if self.page is None:
             raise RuntimeError("请先调用 visit() 访问 MetaMask")
@@ -81,6 +84,7 @@ class MetamaskPage:
         raise RuntimeError(f"无法识别 MetaMask 状态: {self.page.url}")
 
     # 3. 登录账号（已有账号，输入密码解锁）
+    @allure.step("登录账号")
     def login(self, password: str) -> None:
         page = self._require_page()
         password_input = page.locator('input[type="password"]')
@@ -97,6 +101,7 @@ class MetamaskPage:
         self._wait_until_ready()
 
     # 4. 创建账号（无账号，导入助记词并设置密码）
+    @allure.step("导入钱包助记词，创建账号")
     def create(self, mnemonic: str, password: str) -> None:
         page = self._require_page()
         page.get_by_role("button", name="导入现有钱包").click()
@@ -117,6 +122,7 @@ class MetamaskPage:
         self._finish_onboarding()
 
     # 5. 初始化钱包：访问 → 判断状态 → 登录或创建
+    @allure.step("初始化钱包")
     def init_wallet(self, mnemonic: str, password: str) -> WalletState:
         self.visit()
         state = self.get_state()
@@ -129,17 +135,20 @@ class MetamaskPage:
         self.create(mnemonic, password)
         return WalletState.LOGGED_IN
 
+    @allure.step("获取MetaMask页面")
     def _require_page(self) -> Page:
         if self.page is None:
             raise RuntimeError("请先调用 visit() 访问 MetaMask")
         return self.page
 
+    @allure.step("等待MetaMask页面加载完成")
     def _wait_until_ready(self, timeout: int = 60_000) -> None:
         page = self._require_page()
         spinner = page.locator(".loading-spinner")
         if spinner.count():
             spinner.wait_for(state="hidden", timeout=timeout)
 
+    @allure.step("等待MetaMask页面 settled")
     def _wait_for_settled(self, page: Page, timeout: int = 60_000) -> None:
         deadline = time.monotonic() + timeout / 1000
         while time.monotonic() < deadline:
@@ -161,6 +170,7 @@ class MetamaskPage:
         if spinner.count():
             spinner.wait_for(state="hidden", timeout=timeout)
 
+    @allure.step("断言MetaMask页面已登录")
     def _is_logged_in(self) -> bool:
         page = self._require_page()
         if "#/onboarding" in page.url or "#/unlock" in page.url:
@@ -168,6 +178,7 @@ class MetamaskPage:
         account_menu = page.get_by_test_id("account-menu-icon")
         return account_menu.count() > 0 and account_menu.first.is_visible()
 
+    @allure.step("断言MetaMask页面已锁定")
     def _is_locked(self) -> bool:
         page = self._require_page()
         if "#/unlock" in page.url:
@@ -180,11 +191,13 @@ class MetamaskPage:
             and password_input.count() == 1
         )
 
+    @allure.step("断言MetaMask页面需创建账号")
     def _need_create(self) -> bool:
         page = self._require_page()
         import_button = page.get_by_role("button", name="导入现有钱包")
         return import_button.count() > 0 and import_button.first.is_visible()
 
+    @allure.step("填充助记词")
     def _fill_mnemonic(self, mnemonic: str) -> None:
         page = self._require_page()
         mnemonic = " ".join(mnemonic.strip().split())
@@ -199,6 +212,7 @@ class MetamaskPage:
         self._paste_text(mnemonic)
         expect(page.get_by_test_id("import-srp-confirm")).to_be_enabled(timeout=30_000)
 
+    @allure.step("设置密码")
     def _set_password(self, password: str) -> None:
         page = self._require_page()
         pwd_inputs = page.locator('input[type="password"]')
@@ -225,13 +239,13 @@ class MetamaskPage:
         )
         expect(submit.first).to_be_enabled(timeout=30_000)
         submit.first.click()
-
+    @allure.step("完成 onboarding")
     def _finish_onboarding(self) -> None:
         self._dismiss_onboarding_prompts()
         expect(self._require_page().get_by_test_id("account-menu-icon")).to_be_visible(
             timeout=60_000
         )
-
+    @allure.step("关闭 onboarding 提示")
     def _dismiss_onboarding_prompts(self, timeout: int = 90) -> None:
         page = self._require_page()
         deadline = time.monotonic() + timeout
@@ -259,6 +273,7 @@ class MetamaskPage:
             if not clicked:
                 page.wait_for_timeout(500)
 
+    @allure.step("粘贴文本")
     def _paste_text(self, text: str) -> None:
         page = self._require_page()
         if sys.platform == "darwin":
@@ -282,6 +297,7 @@ class MetamaskPage:
                 )
             page.keyboard.press("Control+v")
 
+    @allure.step("确保钱包解锁")
     def ensure_unlocked(self, password: str | None = None) -> None:
         password = password or os.getenv("METAMASK_PASSWORD", "")
         need_close = self.page is None or self.page.is_closed()
@@ -299,6 +315,7 @@ class MetamaskPage:
             self.page.close()
             self.page = None
 
+    @allure.step("确保钱包解锁")
     def _unlock_if_needed(self, page: Page, password: str) -> bool:
         password_input = page.locator('input[type="password"]')
         if password_input.count() == 0 or not password_input.first.is_visible():
@@ -317,11 +334,13 @@ class MetamaskPage:
         page.wait_for_load_state("domcontentloaded")
         return True
 
+    @allure.step("连接到网站")
     def connect_to_site(self, popup: Page) -> None:
         connect_button = popup.get_by_role("button", name=re.compile(r"^连接$|^Connect$"))
         expect(connect_button.first).to_be_visible(timeout=30_000)
         connect_button.first.click()
 
+    @allure.step("签名消息")
     def sign_message(self, popup: Page) -> None:
         sign_button = popup.get_by_role(
             "button", name=re.compile(r"^确认$|^Confirm$|^签名$|^Sign$")
@@ -329,6 +348,38 @@ class MetamaskPage:
         expect(sign_button.first).to_be_visible(timeout=30_000)
         sign_button.first.click()
 
+    def _enabled_button(self, popup: Page, *locators):
+        for locator in locators:
+            count = locator.count()
+            for i in range(count):
+                button = locator.nth(i)
+                if button.is_visible() and button.is_enabled():
+                    return button
+        return None
+
+    def _click_connect(self, popup: Page) -> bool:
+        button = self._enabled_button(
+            popup,
+            popup.locator('[data-testid="page-container-footer-next"]'),
+            popup.get_by_role("button", name=re.compile(r"^连接$|^Connect$")),
+        )
+        if button is None:
+            return False
+        button.click()
+        return True
+
+    def _click_sign(self, popup: Page) -> bool:
+        button = self._enabled_button(
+            popup,
+            popup.locator('[data-testid="confirm-footer-button"]'),
+            popup.get_by_role("button", name=re.compile(r"^确认$|^Confirm$|^签名$|^Sign$")),
+        )
+        if button is None:
+            return False
+        button.click()
+        return True
+
+    @allure.step("批准弹窗")
     def approve_popup(self, popup: Page, password: str | None = None) -> str:
         password = password or os.getenv("METAMASK_PASSWORD", "")
         popup.bring_to_front()
@@ -336,14 +387,14 @@ class MetamaskPage:
         if self._unlock_if_needed(popup, password):
             popup.wait_for_timeout(1_000)
 
-        connect_button = popup.get_by_role("button", name=re.compile(r"^连接$|^Connect$"))
-        if connect_button.count() and connect_button.first.is_visible():
-            connect_button.first.click()
-            return "connect"
+        for _ in range(60):
+            if self._click_connect(popup):
+                popup.wait_for_timeout(1_000)
+                if self._click_sign(popup):
+                    return "sign"
+                return "connect"
+            if self._click_sign(popup):
+                return "sign"
+            popup.wait_for_timeout(500)
 
-        sign_button = popup.get_by_role(
-            "button", name=re.compile(r"^确认$|^Confirm$|^签名$|^Sign$")
-        )
-        expect(sign_button.first).to_be_visible(timeout=30_000)
-        sign_button.first.click()
-        return "sign"
+        raise TimeoutError("MetaMask connect/sign button not found or not enabled")

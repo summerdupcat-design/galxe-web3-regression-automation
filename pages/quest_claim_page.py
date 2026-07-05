@@ -1,7 +1,7 @@
 import os
 import re
 from dataclasses import dataclass
-
+import allure
 from playwright.sync_api import BrowserContext, Page, expect
 
 from utils.gravity_chain import extract_tx_hash
@@ -26,13 +26,16 @@ class QuestClaimPage:
         self.page = page
 
     @property
+    @allure.step("获取Claim按钮")
     def claim_button(self):
         return self.page.get_by_role("button", name=re.compile(r"Claim \d+ Points"))
 
     @property
+    @allure.step("获取Visit Credential按钮")
     def visit_credential(self):
         return self.page.get_by_test_id(VISIT_CREDENTIAL_TEST_ID)
 
+    @allure.step("打开Quest Claim页面")
     def open(self, url: str = QUEST_CLAIM_URL, *, require_credential: bool = True) -> None:
         self.page.goto(url, wait_until="load")
         self.page.bring_to_front()
@@ -43,6 +46,7 @@ class QuestClaimPage:
         else:
             expect(self.claim_button.first).to_be_visible(timeout=30_000)
 
+    @allure.step("完成Visit Credential")
     def complete_visit_credential(self, context: BrowserContext) -> None:
         cred = self.visit_credential
         cred.scroll_into_view_if_needed()
@@ -67,6 +71,7 @@ class QuestClaimPage:
         self._click_element(verify_button.first)
         expect(cred.locator(".bg-success")).to_be_visible(timeout=30_000)
 
+    @allure.step("Claim Reward")
     def claim_reward(self, context: BrowserContext):
         self._dismiss_blocking_dialogs()
         claim_btn = self.claim_button
@@ -89,6 +94,7 @@ class QuestClaimPage:
         self.page.bring_to_front()
         return None
 
+    @allure.step("等待Claim成功")
     def wait_for_claim_success(self) -> ClaimResult:
         expect(
             self.page.get_by_text(
@@ -112,6 +118,7 @@ class QuestClaimPage:
             explorer_url=explorer_url,
         )
 
+    @allure.step("Complete Claim")
     def complete_claim(self, context: BrowserContext, metamask) -> ClaimResult:
         popup = self.claim_reward(context)
         if popup:
@@ -121,18 +128,22 @@ class QuestClaimPage:
         self._dismiss_blocking_dialogs()
         return self.wait_for_claim_success()
 
+    @allure.step("断言Claim成功")
     def assert_reward_claimed(self) -> None:
         self.wait_for_claim_success()
 
+    @allure.step("断言Credential完成")
     def _is_credential_completed(self, cred) -> bool:
         return cred.locator(".bg-success").count() > 0
 
+    @allure.step("展开Credential")
     def _expand_credential(self, cred) -> None:
         header = cred.locator("[aria-expanded]").first
         if header.get_attribute("aria-expanded") == "false":
             header.click()
             self.page.wait_for_timeout(500)
 
+    @allure.step("点击元素")
     def _click_element(self, locator) -> None:
         handle = locator.element_handle()
         if handle is None:
@@ -140,6 +151,7 @@ class QuestClaimPage:
             return
         self.page.evaluate("el => el.click()", handle)
 
+    @allure.step("关闭Blocking Dialogs")
     def _dismiss_blocking_dialogs(self) -> None:
         for _ in range(3):
             dialog = self.page.get_by_role("dialog")

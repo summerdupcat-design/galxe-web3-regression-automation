@@ -1,9 +1,8 @@
 import os
-import re
 import time
 from pathlib import Path
 from typing import Callable, TypedDict
-
+import allure
 import pytest
 from dotenv import load_dotenv
 from playwright.sync_api import BrowserContext, Page, sync_playwright
@@ -71,6 +70,15 @@ def page(context: BrowserContext) -> Page:
 
 
 @pytest.fixture
+def logged_out_page(page: Page, context: BrowserContext) -> Page:
+    metamask = MetamaskPage(context)
+    metamask.ensure_unlocked()
+    galxe_login = GalxeLoginPage(page)
+    galxe_login.ensure_logged_out(context)
+    yield page
+
+
+@pytest.fixture
 def guest_page(playwright_instance) -> Page:
     browser = playwright_instance.chromium.launch(headless=False)
     context = browser.new_context()
@@ -81,28 +89,34 @@ def guest_page(playwright_instance) -> Page:
     browser.close()
 
 
+@pytest.fixture(autouse=True)
+def isolate_browser_context(context: BrowserContext):
+    for popup in list(context.pages):
+        if popup.is_closed():
+            continue
+        if "chrome-extension://" in popup.url and "notification.html" in popup.url:
+            popup.close()
+    yield
+    for popup in list(context.pages):
+        if popup.is_closed():
+            continue
+        if "galxe.com" not in popup.url:
+            continue
+        try:
+            GalxeLoginPage(popup).dismiss_blocking_dialogs()
+        except Exception:
+            pass
+
+
 @pytest.fixture
 def logged_in_page(page, context):
     galxe_login = GalxeLoginPage(page)
-    metamask = MetamaskPage(context)
-    metamask.ensure_unlocked()
-    page.goto(get_base_url(), wait_until="load")
-    page.bring_to_front()
-    login_button = page.get_by_role("banner").get_by_role(
-        "button", name=re.compile(r"Log in|Login", re.I)
-    )
-    if login_button.is_visible(timeout=5_000):
-        galxe_login.click_login_button()
-        popup = galxe_login.choose_metamask(context)
-        if metamask.approve_popup(popup) == "connect":
-            sign_popup = context.wait_for_event("page", timeout=30_000)
-            metamask.approve_popup(sign_popup)
-    galxe_login.assert_login_success()
+    galxe_login.ensure_logged_in(context)
     yield page
 
 
 @pytest.fixture
-def create_quest(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
+def create_quest(logged_in_page: Page, context: BrowserContext) -> Callable[..., ReleasedQuest]:
     def _create_quest(
         *,
         title: str | None = None,
@@ -112,7 +126,7 @@ def create_quest(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
         points: str = "10",
     ) -> ReleasedQuest:
         create_page = CreateQuestPage(logged_in_page)
-        create_page.open()
+        create_page.open(context=context)
 
         quest_title = title or f"Test Quest {int(time.time())}"
         create_page.set_quest_info(title=quest_title, description=description)
@@ -134,7 +148,9 @@ def create_quest(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
 
 
 @pytest.fixture
-def create_quest_no_credentials(logged_in_page: Page) -> Callable[..., ReleasedQuest]:
+def create_quest_no_credentials(
+    logged_in_page: Page, context: BrowserContext
+) -> Callable[..., ReleasedQuest]:
     def _create_quest_no_credentials(
         *,
         title: str | None = None,
@@ -142,7 +158,7 @@ def create_quest_no_credentials(logged_in_page: Page) -> Callable[..., ReleasedQ
         points: str = "10",
     ) -> ReleasedQuest:
         create_page = CreateQuestPage(logged_in_page)
-        create_page.open()
+        create_page.open(context=context)
 
         quest_title = title or f"Test Quest {int(time.time())}"
         create_page.set_quest_info(title=quest_title, description=description)
@@ -157,3 +173,21 @@ def create_quest_no_credentials(logged_in_page: Page) -> Callable[..., ReleasedQ
         return {"url": quest_url, "title": quest_title}
 
     return _create_quest_no_credentials
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    # 只对测试用例的实际执行失败结果进行截图
+    if report.when != "call":
+        return
+    if report.failed:
+        # 获取当前页面的截图
+        page = item.funcargs.get("page")
+        if page:
+            screenshot = page.screenshot(full_page=True)
+            allure.attach(
+                screenshot,
+                name="Failure Screenshot",
+                attachment_type=allure.attachment_type.PNG,
+            )

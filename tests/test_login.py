@@ -1,28 +1,21 @@
-import re
-
-from playwright.sync_api import BrowserContext, Page, expect
+import allure
+from playwright.sync_api import BrowserContext, TimeoutError
 
 from pages.galxe_login_page import GalxeLoginPage
 from pages.metamask_page import MetamaskPage
 from utils.config import get_base_url
 
 
-def test_user_can_login_with_metamask(page: Page, context: BrowserContext):
+@allure.title("用户可以使用MetaMask登录Galxe")
+@allure.feature("登录")
+@allure.story("Metamask登录")
+def test_user_can_login_with_metamask(logged_out_page, context: BrowserContext):
+    page = logged_out_page
     metamask = MetamaskPage(context)
+    metamask.ensure_unlocked()
+
     page.goto(get_base_url(), wait_until="load")
     page.bring_to_front()
-    expect(page.get_by_role("banner")).to_be_visible(timeout=30_000)
 
     galxe_login = GalxeLoginPage(page)
-    galxe_login.click_login_button()
-
-    # 唤起 MetaMask 钱包
-    popup = galxe_login.choose_metamask(context)
-
-    # 等待签名弹窗
-    if metamask.approve_popup(popup) == "connect":
-        sign_popup = context.wait_for_event("page", timeout=30_000)
-        # 签名
-        metamask.approve_popup(sign_popup)
-    galxe_login.assert_login_success()
-    
+    galxe_login.login_with_metamask(context)

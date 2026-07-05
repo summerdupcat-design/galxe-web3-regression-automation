@@ -1,0 +1,1 @@
+{"uuid": "a2695e93-7d10-4289-9d91-266f3c537eba", "children": ["cbeb7c21-8cd8-462d-9786-96d46c5dd8c4"], "befores": [{"name": "create_quest", "status": "passed", "start": 1783233111918, "stop": 1783233111918}], "afters": [{"name": "create_quest::<lambda>", "start": 1783233162100}], "start": 1783233111918, "stop": 1783233162100}

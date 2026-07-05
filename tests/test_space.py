@@ -24,9 +24,11 @@ def test_open_first_space_detail(page: Page):
     space_title = space_page.open_first_space_detail()
     expect(page.locator("main").get_by_text(space_title, exact=True).first).to_be_visible()
 
-def test_user_should_be_prompted_to_connect_wallet_when_clicking_follow_button(guest_page: Page):
-    guest_page.goto(get_base_url(), wait_until="networkidle")
-    space_page = SpacePage(guest_page)
+def test_user_should_be_prompted_to_connect_wallet_when_clicking_follow_button(
+    logged_out_page: Page,
+):
+    page = logged_out_page
+    space_page = SpacePage(page)
     space_page.open_all_spaces()
     space_page.open_first_space_detail()
     space_page.click_space_follow_button()
@@ -37,6 +39,7 @@ def test_user_should_follow_space_successfully(logged_in_page):
     space_page = SpacePage(page)
     space_page.open_all_spaces()
     space_page.open_first_space_detail()
+    space_page.ensure_not_following()
     space_page.click_space_follow_button()
     space_page.assert_user_follow_success()  
 
