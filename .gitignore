@@ -14,8 +14,13 @@ test-results/
 # Environment
 .env
 profiles/
+extensions/metamask/
 
 # IDE
 .idea/
 .vscode/
 *.swp
+
+# Allure generated files
+allure-results/
+allure-report/
