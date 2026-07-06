@@ -39,7 +39,6 @@ class QuestClaimPage:
     def open(self, url: str = QUEST_CLAIM_URL, *, require_credential: bool = True) -> None:
         self.page.goto(url, wait_until="load")
         self.page.bring_to_front()
-        self.page.set_viewport_size({"width": 1440, "height": 900})
         self._dismiss_blocking_dialogs()
         if require_credential:
             expect(self.visit_credential).to_be_visible(timeout=30_000)

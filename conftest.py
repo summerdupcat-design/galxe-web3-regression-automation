@@ -19,6 +19,33 @@ class ReleasedQuest(TypedDict):
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
 
+BROWSER_MAXIMIZE_ARGS = ["--start-maximized"]
+
+
+def _maximize_browser(context: BrowserContext) -> None:
+    if not context.pages:
+        return
+    try:
+        session = context.new_cdp_session(context.pages[0])
+        window = session.send("Browser.getWindowForTarget")
+        session.send(
+            "Browser.setWindowBounds",
+            {
+                "windowId": window["windowId"],
+                "bounds": {"windowState": "maximized"},
+            },
+        )
+    except Exception:
+        pass
+
+
+def _metamask_launch_args(extension_path: Path) -> list[str]:
+    return [
+        f"--disable-extensions-except={extension_path}",
+        f"--load-extension={extension_path}",
+        *BROWSER_MAXIMIZE_ARGS,
+    ]
+
 
 @pytest.fixture(scope="session")
 def playwright_instance():
@@ -39,11 +66,10 @@ def metamask_context(playwright_instance) -> BrowserContext:
     context = playwright_instance.chromium.launch_persistent_context(
         user_data_dir=str(profile_path),
         headless=False,
-        args=[
-            f"--disable-extensions-except={extension_path}",
-            f"--load-extension={extension_path}",
-        ],
+        no_viewport=True,
+        args=_metamask_launch_args(extension_path),
     )
+    _maximize_browser(context)
     metamask = MetamaskPage(context)
     metamask.init_wallet(
         os.getenv("METAMASK_MNEMONIC", "").strip(),
@@ -80,8 +106,12 @@ def logged_out_page(page: Page, context: BrowserContext) -> Page:
 
 @pytest.fixture
 def guest_page(playwright_instance) -> Page:
-    browser = playwright_instance.chromium.launch(headless=False)
-    context = browser.new_context()
+    browser = playwright_instance.chromium.launch(
+        headless=False,
+        args=BROWSER_MAXIMIZE_ARGS,
+    )
+    context = browser.new_context(no_viewport=True)
+    _maximize_browser(context)
     page = context.new_page()
     page.bring_to_front()
     yield page

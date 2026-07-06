@@ -37,9 +37,11 @@ def main() -> None:
             user_data_dir=str(profile_path),
             headless=False,
             slow_mo=300,
+            no_viewport=True,
             args=[
                 f"--disable-extensions-except={extension_arg}",
                 f"--load-extension={extension_arg}",
+                "--start-maximized",
             ],
         )
         metamask = MetamaskPage2(context)

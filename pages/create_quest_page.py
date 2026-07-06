@@ -28,7 +28,6 @@ class CreateQuestPage:
         else:
             self.page.goto(url, wait_until="load")
             self.page.bring_to_front()
-        self.page.set_viewport_size({"width": 1440, "height": 900})
         expect(self.next_step_button).to_be_visible(timeout=30_000)
     @allure.step("Quest Info: 设置Quest Info")
     def set_quest_info(self, title: str, description: str) -> None:
