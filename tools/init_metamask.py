@@ -44,7 +44,7 @@ def main() -> None:
                 "--start-maximized",
             ],
         )
-        metamask = MetamaskPage2(context)
+        metamask = MetamaskPage(context)
 
         print("1. 访问 MetaMask...", flush=True)
         metamask.visit()
